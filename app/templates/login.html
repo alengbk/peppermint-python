@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peppermint-fork - Sign In</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <h2><span data-en="Welcome to Peppermint-fork" data-zh="歡迎使用 Peppermint-fork">Welcome to Peppermint-fork</span></h2>
+    <div id="login-error" class="alert alert-error hidden"></div>
+    <form id="login-form" onsubmit="return handleLogin(event)">
+      <div class="form-group">
+        <label for="email" data-en="Username" data-zh="使用者名稱">Username</label>
+        <input type="text" id="email" class="form-input" data-placeholder-en="username" data-placeholder-zh="使用者名稱" placeholder="username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password" data-en="Password" data-zh="密碼">Password</label>
+        <input type="password" id="password" class="form-input" data-placeholder-en="Password" data-placeholder-zh="密碼" placeholder="Password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="login-btn" data-en="Sign In" data-zh="登入">Sign In</button>
+    </form>
+    <div class="login-footer">
+      <span data-en="Built with Peppermint-fork" data-zh="基於 Peppermint-fork 建置">Built with Peppermint-fork</span>
+    </div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+<script>
+function __(en, zh) { return (localStorage.getItem('lang') || 'en') === 'zh' ? zh : en; }
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  btn.disabled = true;
+  btn.textContent = __('Signing in...', '登入中...');
+  err.classList.add('hidden');
+  try {
+    await login(document.getElementById('email').value, document.getElementById('password').value);
+    window.location.href = '/dashboard';
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('hidden');
+  }
+  btn.disabled = false;
+  btn.textContent = __('Sign In', '登入');
+}
+if (hasToken()) {
+  window.location.href = '/dashboard';
+}
+</script>
+</body>
+</html>

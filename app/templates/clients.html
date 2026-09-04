@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" onclick="showCreateModal()" data-en="New Client" data-zh="新增客戶">New Client</button>
+{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-left">
+    <input type="text" id="filter-search" data-placeholder-en="Search clients..." data-placeholder-zh="搜尋客戶..." placeholder="Search clients..." onkeyup="if(event.key==='Enter')loadClients()">
+  </div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th data-en="Name" data-zh="名稱">Name</th><th>Email</th><th data-en="Contact" data-zh="聯絡人">Contact</th><th data-en="Active" data-zh="啟用">Active</th><th data-en="Created" data-zh="建立時間">Created</th><th data-en="Actions" data-zh="操作">Actions</th></tr>
+    </thead>
+    <tbody id="client-list">
+      <tr><td colspan="6" class="empty-state"><p data-en="Loading..." data-zh="載入中...">Loading...</p></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="client-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:200;overflow-y:auto;">
+  <div style="background:#fff;border-radius:8px;padding:24px;width:480px;max-width:90vw;">
+    <h3 style="font-size:18px;font-weight:600;margin-bottom:16px;" id="modal-title" data-en="New Client" data-zh="新增客戶">New Client</h3>
+    <div class="form-group">
+      <label data-en="Company Name" data-zh="公司名稱">Company Name</label>
+      <input type="text" id="client-name" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="client-email" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label data-en="Contact Person" data-zh="聯絡人">Contact Person</label>
+      <input type="text" id="client-contact" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label data-en="Phone Number" data-zh="電話號碼">Phone Number</label>
+      <input type="text" id="client-number" class="form-input">
+    </div>
+    <div class="form-group">
+      <label data-en="Notes" data-zh="備註">Notes</label>
+      <textarea id="client-notes" class="form-input" rows="2"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-outline" onclick="hideModal()" data-en="Cancel" data-zh="取消">Cancel</button>
+      <button class="btn btn-primary" onclick="submitClient()" data-en="Save" data-zh="儲存">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let editingId = null;
+
+function showCreateModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'New Client';
+  ['client-name','client-email','client-contact','client-number','client-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('client-modal').classList.remove('hidden');
+}
+
+function showEditModal(client) {
+  editingId = client.id;
+  document.getElementById('modal-title').textContent = 'Edit Client';
+  document.getElementById('client-name').value = client.name;
+  document.getElementById('client-email').value = client.email;
+  document.getElementById('client-contact').value = client.contactName;
+  document.getElementById('client-number').value = client.number || '';
+  document.getElementById('client-notes').value = client.notes || '';
+  document.getElementById('client-modal').classList.remove('hidden');
+}
+
+function hideModal() { document.getElementById('client-modal').classList.add('hidden'); }
+
+async function submitClient() {
+  const data = {
+    name: document.getElementById('client-name').value.trim(),
+    email: document.getElementById('client-email').value.trim(),
+    contactName: document.getElementById('client-contact').value.trim(),
+    number: document.getElementById('client-number').value.trim(),
+    notes: document.getElementById('client-notes').value.trim(),
+  };
+  if (!data.name || !data.email || !data.contactName) return alert(__('Name, Email, and Contact are required', '名稱、Email 與聯絡人為必填'));
+  try {
+    if (editingId) {
+      await api(`/client/${editingId}`, { method: 'PUT', body: JSON.stringify(data) });
+    } else {
+      await api('/client', { method: 'POST', body: JSON.stringify(data) });
+    }
+    hideModal();
+    loadClients();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function deleteClient(id, name) {
+  var c = __('Delete client "${name}"? This cannot be undone.', `刪除客戶「${name}」？此操作無法復原。`);
+  if (!confirm(c)) return;
+  try {
+    await api(`/client/${id}`, { method: 'DELETE' });
+    loadClients();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function loadClients() {
+  try {
+    const params = {};
+    const search = document.getElementById('filter-search').value;
+    if (search) params.search = search;
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+    const clients = await api(`/client?${q}`);
+    const tbody = document.getElementById('client-list');
+    tbody.innerHTML = '';
+    if (!clients || clients.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><p>${__('No clients found', '無客戶')}</p></td></tr>`;
+      return;
+    }
+    clients.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${esc(c.name)}</strong></td>
+        <td>${esc(c.email)}</td>
+        <td>${esc(c.contactName)}</td>
+        <td>${c.active ? '<span class="badge badge-green">' + __('Active','啟用') + '</span>' : '<span class="badge badge-red">' + __('Inactive','停用') + '</span>'}</td>
+        <td style="white-space:nowrap;font-size:13px;">${formatDate(c.createdAt)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-outline" onclick='showEditModal(${JSON.stringify(c)})' data-en="Edit" data-zh="編輯">Edit</button>
+          <button class="btn btn-sm btn-outline" onclick="deleteClient('${c.id}','${esc(c.name)}')" style="color:#ef4444;" data-en="Delete" data-zh="刪除">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    document.getElementById('client-list').innerHTML = `<tr><td colspan="6" class="empty-state"><p>${__('Error','錯誤')}: ${e.message}</p></td></tr>`;
+  }
+}
+loadClients();
+</script>
+{% endblock %}

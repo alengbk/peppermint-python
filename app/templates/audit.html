@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-left">
+    <select id="filter-action" onchange="loadAuditLogs()">
+      <option value="" data-en="All Actions" data-zh="所有動作">All Actions</option>
+      <option value="auth.login" data-en="Login" data-zh="登入">Login</option>
+      <option value="auth.login_failed" data-en="Failed Login" data-zh="登入失敗">Failed Login</option>
+      <option value="auth.register" data-en="User Register" data-zh="註冊使用者">User Register</option>
+      <option value="ticket.create" data-en="Ticket Created" data-zh="建立工單">Ticket Created</option>
+      <option value="ticket.close" data-en="Ticket Closed" data-zh="結案">Ticket Closed</option>
+      <option value="ticket.assign" data-en="Ticket Assigned" data-zh="指派工單">Ticket Assigned</option>
+      <option value="ticket.update" data-en="Ticket Updated" data-zh="更新工單">Ticket Updated</option>
+      <option value="ticket.delete" data-en="Ticket Deleted" data-zh="刪除工單">Ticket Deleted</option>
+      <option value="ticket.csv_export" data-en="CSV Export" data-zh="匯出 CSV">CSV Export</option>
+      <option value="user.create" data-en="User Created" data-zh="建立使用者">User Created</option>
+      <option value="user.delete" data-en="User Deleted" data-zh="刪除使用者">User Deleted</option>
+      <option value="client.create" data-en="Client Created" data-zh="建立客戶">Client Created</option>
+      <option value="client.delete" data-en="Client Deleted" data-zh="刪除客戶">Client Deleted</option>
+      <option value="comment.create" data-en="Comment Added" data-zh="新增留言">Comment Added</option>
+      <option value="comment.delete" data-en="Comment Deleted" data-zh="刪除留言">Comment Deleted</option>
+      <option value="config.complete_setup" data-en="Setup Completed" data-zh="完成設定">Setup Completed</option>
+      <option value="service_account.create" data-en="API Key Created" data-zh="建立 API 金鑰">API Key Created</option>
+      <option value="service_account.delete" data-en="API Key Revoked" data-zh="撤銷 API 金鑰">API Key Revoked</option>
+      <option value="service_account.regenerate" data-en="API Key Regenerated" data-zh="重新產生 API 金鑰">API Key Regenerated</option>
+    </select>
+    <select id="filter-source" onchange="loadAuditLogs()">
+      <option value="" data-en="All Sources" data-zh="所有來源">All Sources</option>
+      <option value="human" data-en="Human" data-zh="人類">Human</option>
+      <option value="api" data-en="API" data-zh="API">API</option>
+    </select>
+    <input type="text" id="filter-email" data-placeholder-en="Search email..." data-placeholder-zh="搜尋 Email..." placeholder="Search email..." onkeyup="if(event.key==='Enter')loadAuditLogs()">
+  </div>
+  <div class="toolbar-right">
+    <span class="text-muted" id="log-count"></span>
+  </div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th data-en="Time" data-zh="時間">Time</th><th>Email</th><th data-en="Action" data-zh="動作">Action</th><th data-en="Detail" data-zh="詳細">Detail</th><th data-en="Source" data-zh="來源">Source</th><th data-en="IP Address" data-zh="IP 位址">IP Address</th></tr>
+    </thead>
+    <tbody id="audit-log-list">
+      <tr><td colspan="6" class="empty-state"><p data-en="Loading..." data-zh="載入中...">Loading...</p></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pagination" id="pagination-controls" style="display:none">
+  <div class="pagination-left">
+    <select id="page-size" onchange="setPageSize(parseInt(this.value))">
+      <option value="50" data-en="50 / page" data-zh="每頁 50 筆">50 / page</option>
+      <option value="100" data-en="100 / page" data-zh="每頁 100 筆">100 / page</option>
+      <option value="200" data-en="200 / page" data-zh="每頁 200 筆">200 / page</option>
+    </select>
+  </div>
+  <div class="pagination-center">
+    <button id="prev-page" class="btn btn-sm" onclick="goToPage(currentPage - 1)" disabled><span data-en="&laquo; Prev" data-zh="&laquo; 上一頁">&laquo; Prev</span></button>
+    <span id="page-info" class="page-info">-</span>
+    <button id="next-page" class="btn btn-sm" onclick="goToPage(currentPage + 1)" disabled><span data-en="Next &raquo;" data-zh="下一頁 &raquo;">Next &raquo;</span></button>
+  </div>
+  <div class="pagination-right">
+    <span class="text-muted" id="page-total"></span>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let currentPage = 1;
+let pageSize = 50;
+
+async function loadAuditLogs(page) {
+  try {
+    const targetPage = page !== undefined ? page : 1;
+    currentPage = targetPage;
+    const params = { page: currentPage, pageSize };
+    const action = document.getElementById('filter-action').value;
+    const source = document.getElementById('filter-source').value;
+    const email = document.getElementById('filter-email').value;
+    if (action) params.action = action;
+    if (source) params.source = source;
+    if (email) params.email = email;
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+    const data = await api(`/audit/logs?${q}`);
+    const tbody = document.getElementById('audit-log-list');
+    tbody.innerHTML = '';
+    document.getElementById('log-count').textContent = `${__('Total','共')}: ${data.total}`;
+    document.getElementById('page-total').textContent = `${data.total} ${__('records','筆')}`;
+    if (!data.logs || data.logs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><p>${__('No audit logs found', '無稽核紀錄')}</p></td></tr>`;
+      document.getElementById('pagination-controls').style.display = 'none';
+      return;
+    }
+    document.getElementById('pagination-controls').style.display = 'flex';
+    const totalPages = Math.ceil(data.total / data.pageSize) || 1;
+    document.getElementById('prev-page').disabled = data.page <= 1;
+    document.getElementById('next-page').disabled = data.page >= totalPages;
+    document.getElementById('page-info').innerHTML = `${__('Page ','第 ')}${data.page}${__(' of ',' 頁，共 ')}${totalPages}${__('',' 頁')}`;
+    const actionLabels = {
+      'auth.login': '<span class="badge badge-green">Login</span>',
+      'auth.login_failed': '<span class="badge badge-red">Failed Login</span>',
+      'auth.register': '<span class="badge badge-blue">Register</span>',
+      'ticket.create': '<span class="badge badge-green">Ticket Created</span>',
+      'ticket.close': '<span class="badge badge-red">Ticket Closed</span>',
+      'ticket.assign': '<span class="badge badge-yellow">Assigned</span>',
+      'ticket.update': '<span class="badge badge-blue">Updated</span>',
+      'ticket.delete': '<span class="badge badge-red">Deleted</span>',
+      'ticket.csv_export': '<span class="badge badge-orange">CSV Export</span>',
+      'user.create': '<span class="badge badge-green">User Created</span>',
+      'user.delete': '<span class="badge badge-red">User Deleted</span>',
+      'client.create': '<span class="badge badge-green">Client Created</span>',
+      'client.delete': '<span class="badge badge-red">Client Deleted</span>',
+      'comment.create': '<span class="badge badge-blue">Comment</span>',
+      'comment.delete': '<span class="badge badge-red">Comment Deleted</span>',
+      'config.complete_setup': '<span class="badge badge-blue">Setup</span>',
+    };
+    data.logs.forEach(log => {
+      const tr = document.createElement('tr');
+      const label = actionLabels[log.action] || `<span class="badge badge-blue">${log.action}</span>`;
+      const sourceBadge = log.source === 'api' ? '<span class="badge badge-orange">API</span>' : '<span class="badge badge-blue">' + __('Human','人類') + '</span>';
+      tr.innerHTML = `
+        <td style="white-space:nowrap;font-size:13px;">${formatDate(log.createdAt)}</td>
+        <td>${esc(log.email)}</td>
+        <td>${label}</td>
+        <td>${esc(log.detail || '')}</td>
+        <td>${sourceBadge}</td>
+        <td style="font-size:13px;font-family:monospace;">${esc(log.ipAddress || '')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    document.getElementById('audit-log-list').innerHTML = `<tr><td colspan="6" class="empty-state"><p>${__('Error','錯誤')}: ${e.message}</p></td></tr>`;
+  }
+}
+
+function goToPage(page) {
+  if (page < 1) return;
+  loadAuditLogs(page);
+}
+
+function setPageSize(size) {
+  pageSize = size;
+  loadAuditLogs(1);
+}
+
+loadAuditLogs(1);
+</script>
+{% endblock %}

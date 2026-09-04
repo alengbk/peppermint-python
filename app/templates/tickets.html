@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" onclick="showCreateModal()" data-en="New Ticket" data-zh="新增工單">New Ticket</button>
+<button class="btn btn-sm btn-outline" onclick="exportCSV({ status: document.getElementById('filter-status').value, priority: document.getElementById('filter-priority').value })" data-en="Export CSV" data-zh="匯出 CSV">Export CSV</button>
+{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-left">
+    <select id="filter-status" onchange="applyFilters()">
+      <option value="" data-en="All Status" data-zh="所有狀態">All Status</option>
+      <option value="needs_support" data-en="Open" data-zh="待處理">Open</option>
+      <option value="in_progress" data-en="In Progress" data-zh="處理中">In Progress</option>
+      <option value="hold" data-en="Hold" data-zh="暫停">Hold</option>
+      <option value="in_review" data-en="In Review" data-zh="審核中">In Review</option>
+      <option value="done" data-en="Closed" data-zh="已結案">Closed</option>
+    </select>
+    <select id="filter-priority" onchange="applyFilters()">
+      <option value="" data-en="All Priority" data-zh="所有優先級">All Priority</option>
+      <option value="low" data-en="Low" data-zh="低">Low</option>
+      <option value="medium" data-en="Medium" data-zh="中">Medium</option>
+      <option value="high" data-en="High" data-zh="高">High</option>
+    </select>
+    <input type="text" id="filter-search" data-placeholder-en="Search tickets..." data-placeholder-zh="搜尋工單..." placeholder="Search tickets..." onkeyup="if(event.key==='Enter')applyFilters()">
+  </div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th>#</th><th data-en="Title" data-zh="標題">Title</th><th data-en="Priority" data-zh="優先級">Priority</th><th data-en="Status" data-zh="狀態">Status</th><th data-en="Type" data-zh="類型">Type</th><th data-en="Assignee" data-zh="負責人">Assignee</th></tr>
+    </thead>
+    <tbody id="ticket-list">
+      <tr><td colspan="6" class="empty-state"><p data-en="Loading..." data-zh="載入中...">Loading...</p></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Create Ticket Modal -->
+<div id="create-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:200;overflow-y:auto;">
+  <div style="background:#fff;border-radius:8px;padding:24px;width:480px;max-width:90vw;">
+    <h3 style="font-size:18px;font-weight:600;margin-bottom:16px;" data-en="Create Ticket" data-zh="建立工單">Create Ticket</h3>
+    <div class="form-group">
+      <label data-en="Title" data-zh="標題">Title</label>
+      <input type="text" id="create-title" class="form-input" data-placeholder-en="Enter title" data-placeholder-zh="輸入標題" required>
+    </div>
+    <div class="form-group">
+      <label data-en="Description" data-zh="描述">Description</label>
+      <textarea id="create-detail" class="form-input" rows="3" data-placeholder-en="Describe the issue..." data-placeholder-zh="描述問題..."></textarea>
+    </div>
+    <div class="form-group">
+      <label data-en="Priority" data-zh="優先級">Priority</label>
+      <select id="create-priority" class="form-input">
+        <option value="low" data-en="Low" data-zh="低">Low</option>
+        <option value="medium" selected data-en="Medium" data-zh="中">Medium</option>
+        <option value="high" data-en="High" data-zh="高">High</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label data-en="Type" data-zh="類型">Type</label>
+      <select id="create-type" class="form-input">
+        <option value="support" data-en="Support" data-zh="技術支援">Support</option>
+        <option value="bug" data-en="Bug" data-zh="錯誤">Bug</option>
+        <option value="feature" data-en="Feature" data-zh="功能請求">Feature</option>
+        <option value="incident" data-en="Incident" data-zh="事件">Incident</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-outline" onclick="hideCreateModal()" data-en="Cancel" data-zh="取消">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreate()" data-en="Create" data-zh="建立">Create</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+loadTicketList();
+
+function showCreateModal() { document.getElementById('create-modal').classList.remove('hidden'); }
+function hideCreateModal() { document.getElementById('create-modal').classList.add('hidden'); }
+
+async function submitCreate() {
+  const title = document.getElementById('create-title').value.trim();
+  if (!title) return alert(__('Title is required', '標題為必填'));
+  try {
+    await createTicket({
+      title,
+      detail: document.getElementById('create-detail').value.trim(),
+      priority: document.getElementById('create-priority').value,
+      type: document.getElementById('create-type').value,
+    });
+    hideCreateModal();
+    document.getElementById('create-title').value = '';
+    document.getElementById('create-detail').value = '';
+    loadTicketList();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+</script>
+{% endblock %}

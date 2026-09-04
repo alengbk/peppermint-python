@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" onclick="window.location.href='/tickets'" data-en="New Ticket" data-zh="新增工單">New Ticket</button>
+{% endblock %}
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card" onclick="window.location.href='/tickets?status=needs_support'">
+    <div class="stat-number" id="stat-open">—</div>
+    <div class="stat-label" data-en="Open Issues" data-zh="待處理">Open Issues</div>
+  </div>
+  <div class="stat-card" onclick="window.location.href='/tickets?status=done'">
+    <div class="stat-number" id="stat-done">—</div>
+    <div class="stat-label" data-en="Completed Issues" data-zh="已完成">Completed Issues</div>
+  </div>
+  <div class="stat-card" onclick="window.location.href='/tickets'">
+    <div class="stat-number" id="stat-total">—</div>
+    <div class="stat-label" data-en="Total Tickets" data-zh="全部工單">Total Tickets</div>
+  </div>
+</div>
+
+<div class="table-container">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+    <strong style="font-size:14px;" data-en="Recent Tickets" data-zh="近期工單">Recent Tickets</strong>
+    <button class="btn btn-sm btn-outline" onclick="exportCSV()" data-en="Export CSV" data-zh="匯出 CSV">Export CSV</button>
+  </div>
+  <table>
+    <thead>
+      <tr><th>#</th><th data-en="Title" data-zh="標題">Title</th><th data-en="Priority" data-zh="優先級">Priority</th><th data-en="Status" data-zh="狀態">Status</th><th data-en="Assigned To" data-zh="指派給">Assigned To</th></tr>
+    </thead>
+    <tbody id="recent-tickets">
+      <tr><td colspan="5" class="empty-state"><p data-en="Loading..." data-zh="載入中...">Loading...</p></td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadStats() {
+  try {
+    const all = await fetchTickets({ pageSize: 1 });
+    document.getElementById('stat-total').textContent = all.total || 0;
+    const open = await fetchTickets({ pageSize: 1, status: 'needs_support' });
+    document.getElementById('stat-open').textContent = open.total || 0;
+    const done = await fetchTickets({ pageSize: 1, status: 'done' });
+    document.getElementById('stat-done').textContent = done.total || 0;
+  } catch(e) {}
+}
+loadStats();
+loadDashboard();
+</script>
+{% endblock %}

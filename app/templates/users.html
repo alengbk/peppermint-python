@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block topbar_actions %}
+<button class="btn btn-sm btn-primary" onclick="showCreateModal()" data-en="New User" data-zh="新增使用者">New User</button>
+{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div class="toolbar-left">
+    <input type="text" id="filter-search" data-placeholder-en="Search users..." data-placeholder-zh="搜尋使用者..." placeholder="Search users..." onkeyup="if(event.key==='Enter')loadUsers()">
+  </div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr><th data-en="Name" data-zh="名稱">Name</th><th data-en="Email" data-zh="Email">Email</th><th data-en="Role" data-zh="角色">Role</th><th data-en="Created" data-zh="建立時間">Created</th><th data-en="Actions" data-zh="操作">Actions</th></tr>
+    </thead>
+    <tbody id="user-list">
+      <tr><td colspan="5" class="empty-state"><p data-en="Loading..." data-zh="載入中...">Loading...</p></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Create/Edit Modal -->
+  <div id="user-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:200;overflow-y:auto;">
+  <div style="background:#fff;border-radius:8px;padding:24px;width:480px;max-width:90vw;">
+    <h3 style="font-size:18px;font-weight:600;margin-bottom:16px;" id="modal-title" data-en="New User" data-zh="新增使用者">New User</h3>
+    <div class="form-group">
+      <label data-en="Name" data-zh="名稱">Name</label>
+      <input type="text" id="user-name" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="user-email" class="form-input" required>
+    </div>
+    <div class="form-group">
+      <label data-en="Password" data-zh="密碼">Password</label>
+      <input type="password" id="user-password" class="form-input" data-placeholder-en="Leave blank to keep current" data-placeholder-zh="留空則維持不變" placeholder="Leave blank to keep current">
+    </div>
+    <div class="form-group">
+      <label><input type="checkbox" id="user-admin"> <span data-en="Administrator" data-zh="管理員">Administrator</span></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-outline" onclick="hideModal()" data-en="Cancel" data-zh="取消">Cancel</button>
+      <button class="btn btn-primary" onclick="submitUser()" data-en="Save" data-zh="儲存">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let editingId = null;
+
+function showCreateModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'New User';
+  document.getElementById('user-name').value = '';
+  document.getElementById('user-email').value = '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password').required = true;
+  document.getElementById('user-admin').checked = false;
+  document.getElementById('user-modal').classList.remove('hidden');
+}
+
+function showEditModal(user) {
+  editingId = user.id;
+  document.getElementById('modal-title').textContent = 'Edit User';
+  document.getElementById('user-name').value = user.name;
+  document.getElementById('user-email').value = user.email;
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password').required = false;
+  document.getElementById('user-admin').checked = user.isAdmin;
+  document.getElementById('user-modal').classList.remove('hidden');
+}
+
+function hideModal() { document.getElementById('user-modal').classList.add('hidden'); }
+
+async function submitUser() {
+  const data = {
+    name: document.getElementById('user-name').value.trim(),
+    email: document.getElementById('user-email').value.trim(),
+  };
+  const isAdmin = document.getElementById('user-admin').checked;
+  if (!data.name || !data.email) return alert(__('Name and Email are required', '名稱與 Email 為必填'));
+  const password = document.getElementById('user-password').value;
+  try {
+    if (editingId) {
+      data.is_admin = isAdmin;
+      if (password) data.password = password;
+      await api(`/user/${editingId}`, { method: 'PUT', body: JSON.stringify(data) });
+    } else {
+      if (!password) return alert(__('Password is required', '密碼為必填'));
+      data.password = password;
+      data.admin = isAdmin;
+      await api('/user', { method: 'POST', body: JSON.stringify(data) });
+    }
+    hideModal();
+    loadUsers();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function deleteUser(id, name) {
+  var c = __('Delete user "${name}"? This cannot be undone.', `刪除使用者「${name}」？此操作無法復原。`);
+  if (!confirm(c)) return;
+  try {
+    await api(`/user/${id}`, { method: 'DELETE' });
+    loadUsers();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function loadUsers() {
+  try {
+    const params = {};
+    const search = document.getElementById('filter-search').value;
+    if (search) params.search = search;
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+    const users = await api(`/user?${q}`);
+    const tbody = document.getElementById('user-list');
+    tbody.innerHTML = '';
+    if (!users || users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><p>${__('No users found', '無使用者')}</p></td></tr>`;
+      return;
+    }
+    users.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${avatar({ name: u.name })} ${esc(u.name)}</td>
+        <td>${esc(u.email)}</td>
+        <td>${u.isAdmin ? '<span class="badge badge-green">' + __('Admin','管理員') + '</span>' : '<span class="badge badge-blue">' + __('Agent','人員') + '</span>'}</td>
+        <td style="white-space:nowrap;font-size:13px;">${formatDate(u.createdAt)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-outline" onclick='showEditModal(${JSON.stringify(u)})' data-en="Edit" data-zh="編輯">Edit</button>
+          <button class="btn btn-sm btn-outline" onclick="deleteUser('${u.id}','${esc(u.name)}')" style="color:#ef4444;" data-en="Delete" data-zh="刪除">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch(e) {
+    document.getElementById('user-list').innerHTML = `<tr><td colspan="5" class="empty-state"><p>${__('Error','錯誤')}: ${e.message}</p></td></tr>`;
+  }
+}
+loadUsers();
+</script>
+{% endblock %}
